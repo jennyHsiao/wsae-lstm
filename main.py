@@ -52,7 +52,11 @@ for sheet_name in raw_xl.sheet_names[::2]:
     print("[%s] to [%s]  as  a train set" % (init_date_time_str, timestampStr))
     subset = data_master[ (data_master[time_id]>=int(init_date_time_str))& (data_master[time_id]<int(timestampStr))]
     # normalize
-    train_set = pd.DataFrame(scaler.fit_transform(subset))
+    # normalized based only upon the minimum-maximum values of their corresponding training set
+    # in order to eliminamte any prior knowledge of overall scale would occur in real-time prediction
+    scaler.fit(subset)
+    print(scaler.mean_)
+    train_set = pd.DataFrame(scaler.transform(subset))
 
     i = list(train_set.index)[-1]
     print(data_master.shape)
@@ -62,7 +66,7 @@ for sheet_name in raw_xl.sheet_names[::2]:
     print("[%s] to [%s]  as  a valid set" % (init_date_time_str, timestampStr))
     subset = data_master[ (data_master[time_id]>int(init_date_time_str)) & (data_master[time_id]<int(timestampStr))]
     # normalize
-    valid_set = pd.DataFrame(scaler.fit_transform(subset))
+    valid_set = pd.DataFrame(scaler.transform(subset))
     
 
     i = list(valid_set.index)[-1]
@@ -73,7 +77,7 @@ for sheet_name in raw_xl.sheet_names[::2]:
     subset = data_master[ (data_master[time_id]>int(init_date_time_str)) & (data_master[time_id]<int(timestampStr))]
     # normalize
     
-    test_set = pd.DataFrame(scaler.fit_transform(subset))
+    test_set = pd.DataFrame(scaler.transform(subset))
 
     # print(test_set)
     wt_data = train_set.copy()
@@ -82,5 +86,6 @@ for sheet_name in raw_xl.sheet_names[::2]:
         wt_data[col] = waveletSmooth(train_set[col], level=1)[-len(wt_data[col]):]
 
     print(wt_data)
+
 
     break

@@ -8,7 +8,7 @@ def waveletSmooth( x, wavelet="sym8", level=1, DecLvl=2, title=None):
     # calculate a threshold
     sigma = mad( coeff[-level] )
     # changing this threshold also changes the behavior,
-    # but I have not played with this very much
+    # we can tune 'threshold' later
     uthresh = sigma * np.sqrt( 2*np.log( len( x ) ) )
     coeff[1:] = ( pywt.threshold( i, value=uthresh, mode="soft" ) for i in coeff[1:] )
     # reconstruct the signal using the thresholded coefficients
