@@ -50,23 +50,25 @@ class AutoEncoder(nn.Module):
     def __init__(self):
         super(AutoEncoder, self).__init__()
 
-        self.encoder = nn.Sequential(
-            nn.Linear(28*28, 128),
-            nn.Tanh(),
-            nn.Linear(128, 64),
-            nn.Tanh(),
-            nn.Linear(64, 12),
-            nn.Tanh(),
-            nn.Linear(12, 3),   # compress to 3 features which can be visualized in plt
+        w=100
+        h=100
+        self.encoder = nn.Sequential(            
+            nn.Linear(w*h, 19),
+            nn.ELU(),
+            nn.Linear(19, 15),
+            nn.ELU(),
+            nn.Linear(15, 10),
+            nn.ELU(),
+            nn.Linear(10, 10),   # compress to 3 features which can be visualized in plt
         )
         self.decoder = nn.Sequential(
-            nn.Linear(3, 12),
+            nn.Linear(10, 10),
+            nn.ELU(),
+            nn.Linear(10, 15),
+            nn.ELU(),
+            nn.Linear(15, 19),
             nn.Tanh(),
-            nn.Linear(12, 64),
-            nn.Tanh(),
-            nn.Linear(64, 128),
-            nn.Tanh(),
-            nn.Linear(128, 28*28),
+            nn.Linear(19, w*h),
             nn.Sigmoid(),       # compress to a range (0, 1)
         )
 
@@ -78,8 +80,8 @@ class AutoEncoder(nn.Module):
 
 autoencoder = AutoEncoder()
 
-optimizer = torch.optim.Adam(autoencoder.parameters(), lr=LR)
-loss_func = nn.MSELoss()
+optimizer = torch.optim.Adadelta(autoencoder.parameters(), lr=LR)
+loss_func = nn.L1Loss()
 
 # initialize figure
 f, a = plt.subplots(2, N_TEST_IMG, figsize=(5, 2))
