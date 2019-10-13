@@ -1,130 +1,73 @@
-"""
-View more, visit my tutorial page: https://morvanzhou.github.io/tutorials/
-My Youtube Channel: https://www.youtube.com/user/MorvanZhou
-
-Dependencies:
-torch: 0.4
-matplotlib
-numpy
-"""
+import matplotlib.pyplot as plt
+import numpy as np
+import sklearn
 import torch
 import torch.nn as nn
-import torch.utils.data as Data
-import torchvision
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
-import numpy as np
-
+from torch.autograd import Variable
 
 # torch.manual_seed(1)    # reproducible
 
-# Hyper Parameters
-EPOCH = 10
-BATCH_SIZE = 64
-LR = 0.005         # learning rate
-DOWNLOAD_MNIST = True
-N_TEST_IMG = 5
+class Autoencoder(torch.nn.Module):
+    def __init__(self, n_in, n_hidden=10, lr=0.001, weight_decay=0.0):#lr=0.0001):
+        super(Autoencoder, self).__init__()
+        self.n_in = n_in
+        self.n_hidden = n_hidden        
+        self.weight_decay = weight_decay
+        self.lr = lr
+        self.build_model()
+    # end constructor
 
-# Mnist digits dataset
-train_data = torchvision.datasets.MNIST(
-    root='./mnist/',
-    train=True,                                     # this is training data
-    transform=torchvision.transforms.ToTensor(),    # Converts a PIL.Image or numpy.ndarray to
-                                                    # torch.FloatTensor of shape (C x H x W) and normalize in the range [0.0, 1.0]
-    download=DOWNLOAD_MNIST,                        # download it if you don't have it
-)
-
-# plot one example
-print(train_data.train_data.size())     # (60000, 28, 28)
-print(train_data.train_labels.size())   # (60000)
-plt.imshow(train_data.train_data[2].numpy(), cmap='gray')
-plt.title('%i' % train_data.train_labels[2])
-plt.show()
-
-# Data Loader for easy mini-batch return in training, the image batch shape will be (50, 1, 28, 28)
-train_loader = Data.DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
-
-
-class AutoEncoder(nn.Module):
-    def __init__(self):
-        super(AutoEncoder, self).__init__()
-
-        w=100
-        h=100
-        self.encoder = nn.Sequential(            
-            nn.Linear(w*h, 19),
-            nn.ELU(),
-            nn.Linear(19, 15),
-            nn.ELU(),
-            nn.Linear(15, 10),
-            nn.ELU(),
-            nn.Linear(10, 10),   # compress to 3 features which can be visualized in plt
-        )
-        self.decoder = nn.Sequential(
-            nn.Linear(10, 10),
-            nn.ELU(),
-            nn.Linear(10, 15),
-            nn.ELU(),
-            nn.Linear(15, 19),
-            nn.Tanh(),
-            nn.Linear(19, w*h),
-            nn.Sigmoid(),       # compress to a range (0, 1)
-        )
+    def build_model(self):
+        self.encoder = torch.nn.Sequential(
+            torch.nn.Linear(self.n_in, self.n_hidden),
+            torch.nn.ELU())
+        self.decoder = torch.nn.Sequential(
+            torch.nn.Linear(self.n_hidden, self.n_in),
+            torch.nn.ELU())
+        self.criterion = torch.nn.MSELoss()        
+        self.optimizer = torch.optim.Adadelta(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
     def forward(self, x):
-        encoded = self.encoder(x)
-        decoded = self.decoder(encoded)
-        return encoded, decoded
+        
+        y = self.encoder(x)
+
+        if self.training:
+            x_reconstruct = self.decoder(y)
+            loss = self.criterion(x_reconstruct, Variable(x.data, requires_grad=False))
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+            
+        return y.detach()
+
+    def reconstruct(self, x):
+        return self.decoder(x)
 
 
-autoencoder = AutoEncoder()
 
-optimizer = torch.optim.Adadelta(autoencoder.parameters(), lr=LR)
-loss_func = nn.L1Loss()
+    # def forward(self, x):
+    #     encoded = self.encoder(x)
+    #     decoded = self.decoder(encoded)
+    #     return encoded, decoded
 
-# initialize figure
-f, a = plt.subplots(2, N_TEST_IMG, figsize=(5, 2))
-plt.ion()   # continuously plot
+    # def fit(self, X, n_epoch=10, batch_size=64, en_shuffle=True):
+    #     for epoch in range(n_epoch):
+    #         if en_shuffle:
+    #             print("Data Shuffled")
+    #             X = sklearn.utils.shuffle(X)
+    #         for local_step, X_batch in enumerate(self.gen_batch(X, batch_size)):
+    #             inputs = torch.autograd.Variable(torch.from_numpy(X_batch.astype(np.float32)))
+    #             outputs, sparsity_loss = self.forward(inputs)
 
-# original data (first row) for viewing
-view_data = train_data.train_data[:N_TEST_IMG].view(-1, 28*28).type(torch.FloatTensor)/255.
-for i in range(N_TEST_IMG):
-    a[0][i].imshow(np.reshape(view_data.data.numpy()[i], (28, 28)), cmap='gray'); a[0][i].set_xticks(()); a[0][i].set_yticks(())
+    #             loss = self.loss(outputs, inputs)                
+    #             self.optimizer.zero_grad()                             # clear gradients for this training step
+    #             loss.backward()                                        # backpropagation, compute gradients
+    #             self.optimizer.step()                                  # apply gradients
+    #             if local_step % 50 == 0:
+    #                 print ("Epoch %d/%d | Step %d/%d | train loss: %.4f | l1 loss: %.4f | sparsity loss: %.4f"
+    #                        %(epoch+1, n_epoch, local_step, len(X)//batch_size,
+    #                          loss.data[0], l1_loss.data[0], sparsity_loss.data[0]))
 
-for epoch in range(EPOCH):
-    for step, (x, b_label) in enumerate(train_loader):
-        b_x = x.view(-1, 28*28)   # batch x, shape (batch, 28*28)
-        b_y = x.view(-1, 28*28)   # batch y, shape (batch, 28*28)
-
-        encoded, decoded = autoencoder(b_x)
-
-        loss = loss_func(decoded, b_y)      # mean square error
-        optimizer.zero_grad()               # clear gradients for this training step
-        loss.backward()                     # backpropagation, compute gradients
-        optimizer.step()                    # apply gradients
-
-        if step % 100 == 0:
-            print('Epoch: ', epoch, '| train loss: %.4f' % loss.data.numpy())
-
-            # plotting decoded image (second row)
-            _, decoded_data = autoencoder(view_data)
-            for i in range(N_TEST_IMG):
-                a[1][i].clear()
-                a[1][i].imshow(np.reshape(decoded_data.data.numpy()[i], (28, 28)), cmap='gray')
-                a[1][i].set_xticks(()); a[1][i].set_yticks(())
-            plt.draw(); plt.pause(0.05)
-
-plt.ioff()
-plt.show()
-
-# visualize in 3D plot
-view_data = train_data.train_data[:200].view(-1, 28*28).type(torch.FloatTensor)/255.
-encoded_data, _ = autoencoder(view_data)
-fig = plt.figure(2); ax = Axes3D(fig)
-X, Y, Z = encoded_data.data[:, 0].numpy(), encoded_data.data[:, 1].numpy(), encoded_data.data[:, 2].numpy()
-values = train_data.train_labels[:200].numpy()
-for x, y, z, s in zip(X, Y, Z, values):
-    c = cm.rainbow(int(255*s/9)); ax.text(x, y, z, s, backgroundcolor=c)
-ax.set_xlim(X.min(), X.max()); ax.set_ylim(Y.min(), Y.max()); ax.set_zlim(Z.min(), Z.max())
-plt.show()
+    # def gen_batch(self, arr, batch_size):
+    #     for i in range(0, len(arr), batch_size):
+    #         yield arr[i : i+batch_size]
